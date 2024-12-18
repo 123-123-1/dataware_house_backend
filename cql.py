@@ -437,9 +437,69 @@ def review_score(num,score):
         a,b = getInfo(plan)
         return r,a,b  
 
-@app.route('/', methods=['GET'])
-def hello():
-    return "2132456"
+@app.route('/fullsearch', methods=['GET'])
+def fullsearch():
+    moviename = request.args.get('moviename', None)
+    style = request.args.get('style', None)
+    startTime = request.args.get('startTime', None)
+    startTime =startTime.strftime('%Y-%m-%d') if startTime else None
+    endTime = request.args.get('endTime', None)
+    endTime=endTime.strftime('%Y-%m-%d') if endTime else None
+    director = request.args.get('director', None)
+    actor = request.args.get('actor', None)
+    percent = request.args.get('percent', None, type=float)
+    lowscore = request.args.get('lowscore', None, type=float)
+    highscore = request.args.get('highscore', None, type=float)
+    query="""
+    PROFILE
+    match (m:Movie)
+    where ($moviename is null or m.movie_name = $moviename )
+          and(($startTime is null or $endTime is null) or (m.movie_release_time >=$startTime and m.movie_release_time <=$endTime))
+          and (($lowscore is null or $highscore is null) or(m.score>=$lowscore and m.score<=$highscore))
+          and (($percent is null) or (m.score_three + m.score_four + m.score_five)/m.comment_num >= $percent) 
+    with  m
+    match (m)-[:MOVIE_STYLE]-(o:Movie_style)
+    where $style is null or  o.style= $style 
+    with m 
+    match (m)-[:ACTED]-(n:Actor)
+    where $actor is null or n.actor_name=$actor
+    with m 
+    match (m)-[:DIRECTED]-(l:Director)
+    where $director is null or l.director_name=$director
+    
+    return distinct m.movie_id as movie_id,m.movie_name as movie_name,m.movie_release_time as time;
+    """
+    with driver.session() as session:
+        result = session.run(query,
+                             moviename = moviename,
+                             style=style,
+                             startTime=startTime,
+                             endTime=endTime,
+                             director=director,
+                             actor=actor,
+                             percent=percent,
+                             lowscore=lowscore,
+                             highscore=highscore) 
+        movie_data = []
+        for record in result:
+            # 获取每个字段的值
+            movie_id = record["movie_id"]
+            movie_name = record["movie_name"]
+            release_time = record["time"].strftime('%Y-%m-%d') if record["time"] else None
+            
+            movie_data.append({
+                "movie_id": movie_id,
+                "movie_name": movie_name,
+                "movie_release_time": release_time
+            })
+        plan = result.consume()
+        a,b = getInfo(plan)
+        return  jsonify({
+            "time": a,
+            "report": b,
+            "data": movie_data
+        })
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000)
+ 
