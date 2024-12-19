@@ -2,11 +2,13 @@ import datetime
 import re
 from neo4j import GraphDatabase
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 
 # 设置连接
 uri = "bolt://localhost:7687"
 driver = GraphDatabase.driver(uri, auth=("neo4j", "hkf2157871359"))
 app = Flask(__name__)
+CORS(app)  
 
 def import_movie_CSV():
     query ="""LOAD CSV WITH HEADERS FROM 'file:///movie.csv' AS row CREATE (m:Movie {
@@ -333,21 +335,39 @@ def actor(name):
         return r,a,b     
 
 
-def acted_with(num):
+@app.route('/acted_with', methods=['GET'])
+def acted_with():
+    num = request.args.get('num',type=int,default= 0)
     query = """
     PROFILE
     MATCH (m:Actor)-[r:ACTED_WITH]->(n:Actor)
-    WHERE r.count>=$num
+    WHERE r.count >= $num
     RETURN m.actor_name as d,n.actor_name as f
     """
     with driver.session() as session:
         result = session.run(query,num=num) 
-        r = [record["d"]+" "+record["f"] for record in result]
+
+        data = []
+        for record in result:
+            # 获取每个字段的值
+            actor1 = record["d"]
+            actor2 = record["f"]
+            data.append({
+                "actor1": actor1,
+                "actor2": actor2
+            })
         plan = result.consume()
         a,b = getInfo(plan)
-        return r,a,b  
+        return  jsonify({
+            "time": a,   
+            "report": b,
+            "data": data,
+            "num":num
+        })
     
-def worked_with(num):
+@app.route('/worked_with', methods=['GET'])
+def worked_with():
+    num = request.args.get('num',type=int, default=0)
     query = """
     PROFILE
     MATCH (m:Director)-[r:WORKED_WITH]->(n:Actor)
@@ -356,10 +376,22 @@ def worked_with(num):
     """
     with driver.session() as session:
         result = session.run(query,num=num) 
-        r = [record["d"]+" "+record["f"] for record in result]
+        data = []
+        for record in result:
+            # 获取每个字段的值
+            director = record["d"]
+            actor = record["f"]
+            data.append({
+                "director": director,
+                "actor": actor
+            })
         plan = result.consume()
         a,b = getInfo(plan)
-        return r,a,b  
+        return  jsonify({
+            "time": a,   
+            "report": b,
+            "data": data
+        })
 
 def style_strict(style):
     query = """
@@ -442,9 +474,9 @@ def fullsearch():
     moviename = request.args.get('moviename', None)
     style = request.args.get('style', None)
     startTime = request.args.get('startTime', None)
-    startTime =startTime.strftime('%Y-%m-%d') if startTime else None
+    startTime =startTime.strptime('%Y-%m-%d') if startTime else None
     endTime = request.args.get('endTime', None)
-    endTime=endTime.strftime('%Y-%m-%d') if endTime else None
+    endTime=endTime.strptime('%Y-%m-%d') if endTime else None
     director = request.args.get('director', None)
     actor = request.args.get('actor', None)
     percent = request.args.get('percent', None, type=float)
@@ -458,16 +490,16 @@ def fullsearch():
           and (($lowscore is null or $highscore is null) or(m.score>=$lowscore and m.score<=$highscore))
           and (($percent is null) or (m.score_three + m.score_four + m.score_five)/m.comment_num >= $percent) 
     with  m
-    match (m)-[:MOVIE_STYLE]-(o:Movie_style)
-    where $style is null or  o.style= $style 
+    optional match (m)-[:MOVIE_STYLE]-(o:Movie_style)
+    where $style is null or  COALESCE(o.style,null)= $style 
     with m 
-    match (m)-[:ACTED]-(n:Actor)
-    where $actor is null or n.actor_name=$actor
+    optional match (m)-[:ACTED]-(n:Actor)
+    where $actor is null or COALESCE(n.actor_name,null)=$actor
     with m 
-    match (m)-[:DIRECTED]-(l:Director)
-    where $director is null or l.director_name=$director
+    optional match (m)-[:DIRECTED]-(l:Director)
+    where $director is null or COALESCE(l.director_name,null)=$director
     
-    return distinct m.movie_id as movie_id,m.movie_name as movie_name,m.movie_release_time as time;
+    return distinct m.movie_id as movie_id,m.movie_name as movie_name,m.movie_release_time as time limit 100;
     """
     with driver.session() as session:
         result = session.run(query,
@@ -483,10 +515,10 @@ def fullsearch():
         movie_data = []
         for record in result:
             # 获取每个字段的值
+            
             movie_id = record["movie_id"]
             movie_name = record["movie_name"]
             release_time = record["time"].strftime('%Y-%m-%d') if record["time"] else None
-            
             movie_data.append({
                 "movie_id": movie_id,
                 "movie_name": movie_name,
@@ -495,11 +527,10 @@ def fullsearch():
         plan = result.consume()
         a,b = getInfo(plan)
         return  jsonify({
-            "time": a,
+            "time": a,   
             "report": b,
             "data": movie_data
         })
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000)
- 
