@@ -474,14 +474,20 @@ def fullsearch():
     moviename = request.args.get('moviename', None)
     style = request.args.get('style', None)
     startTime = request.args.get('startTime', None)
-    startTime =startTime.strptime('%Y-%m-%d') if startTime else None
     endTime = request.args.get('endTime', None)
-    endTime=endTime.strptime('%Y-%m-%d') if endTime else None
     director = request.args.get('director', None)
     actor = request.args.get('actor', None)
     percent = request.args.get('percent', None, type=float)
     lowscore = request.args.get('lowscore', None, type=float)
     highscore = request.args.get('highscore', None, type=float)
+    version=request.args.get('version', None)
+    limit=request.args.get('limit',1000,type=int)
+    try:
+        startTime = datetime.strptime(startTime, '%Y-%m-%d') if startTime else None
+        endTime = datetime.strptime(endTime, '%Y-%m-%d') if endTime else None
+    except ValueError:
+        return jsonify({"error": "Invalid date format. Use YYYY-MM-DD."}), 400
+
     query="""
     PROFILE
     match (m:Movie)
@@ -498,8 +504,9 @@ def fullsearch():
     with m 
     optional match (m)-[:DIRECTED]-(l:Director)
     where $director is null or COALESCE(l.director_name,null)=$director
-    
-    return distinct m.movie_id as movie_id,m.movie_name as movie_name,m.movie_release_time as time limit 100;
+    optional match (m)-[:MOVIE_VERSION]-(o:Movie_version)
+    where $version is null or COALESCE(o.version,null)=$version
+    return distinct m.movie_id as movie_id,m.movie_name as movie_name,m.movie_release_time as time;
     """
     with driver.session() as session:
         result = session.run(query,
@@ -511,6 +518,7 @@ def fullsearch():
                              actor=actor,
                              percent=percent,
                              lowscore=lowscore,
+                             version=version,
                              highscore=highscore) 
         movie_data = []
         for record in result:
@@ -529,7 +537,7 @@ def fullsearch():
         return  jsonify({
             "time": a,   
             "report": b,
-            "data": movie_data
+            "results": movie_data[:limit]
         })
 
 if __name__ == '__main__':
