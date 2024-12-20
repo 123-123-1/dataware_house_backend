@@ -1,5 +1,6 @@
 import datetime
 import re
+import time
 from neo4j import GraphDatabase
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -524,6 +525,7 @@ def fullsearch():
     where $version is null or COALESCE(o.version,null)=$version
     return distinct m.score as movie_score,m.movie_name as movie_name,m.movie_release_time as time;
     """
+
     with driver.session() as session:
         result = session.run(query,
                              moviename = moviename,
@@ -536,6 +538,7 @@ def fullsearch():
                              lowscore=lowscore,
                              version=version,
                              highscore=highscore) 
+        
         movie_data = []
         for record in result:
             # 获取每个字段的值
