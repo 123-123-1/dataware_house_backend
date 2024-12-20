@@ -3,6 +3,8 @@ import re
 from neo4j import GraphDatabase
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from datetime import datetime
+
 
 # 设置连接
 uri = "bolt://localhost:7687"
@@ -474,14 +476,28 @@ def fullsearch():
     moviename = request.args.get('moviename', None)
     style = request.args.get('style', None)
     startTime = request.args.get('startTime', None)
-    endTime = request.args.get('endTime', None)
+    endTime = request.args.get('endTime', None) 
     director = request.args.get('director', None)
     actor = request.args.get('actor', None)
-    percent = request.args.get('percent', None, type=float)
-    lowscore = request.args.get('lowscore', None, type=float)
-    highscore = request.args.get('highscore', None, type=float)
+    percent = request.args.get('percent', 50, type=float)
+    lowscore = request.args.get('lowscore', 0.0, type=float)
+    highscore = request.args.get('highscore', 5.0, type=float)
     version=request.args.get('version', None)
-    limit=request.args.get('limit',1000,type=int)
+    limit=request.args.get('limit',100,type=int)
+    def convert_empty_string_to_none(value):
+        return None if value == '' else value
+
+    # 应用转换
+    moviename = convert_empty_string_to_none(moviename)
+    style = convert_empty_string_to_none(style)
+    startTime = convert_empty_string_to_none(startTime)
+    endTime = convert_empty_string_to_none(endTime)
+    director = convert_empty_string_to_none(director)
+    actor = convert_empty_string_to_none(actor)
+    version = convert_empty_string_to_none(version)
+    percent = percent/100
+    
+
     try:
         startTime = datetime.strptime(startTime, '%Y-%m-%d') if startTime else None
         endTime = datetime.strptime(endTime, '%Y-%m-%d') if endTime else None
@@ -492,7 +508,7 @@ def fullsearch():
     PROFILE
     match (m:Movie)
     where ($moviename is null or m.movie_name = $moviename )
-          and(($startTime is null or $endTime is null) or (m.movie_release_time >=$startTime and m.movie_release_time <=$endTime))
+          and(($startTime is null or $endTime is null) or (date(m.movie_release_time) >=date($startTime) and date(m.movie_release_time) <=date($endTime)))
           and (($lowscore is null or $highscore is null) or(m.score>=$lowscore and m.score<=$highscore))
           and (($percent is null) or (m.score_three + m.score_four + m.score_five)/m.comment_num >= $percent) 
     with  m
@@ -541,4 +557,4 @@ def fullsearch():
         })
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8000)
+    app.run(host='0.0.0.0', port=8000,debug=True)
