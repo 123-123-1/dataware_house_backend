@@ -556,7 +556,8 @@ def fullsearch():
         return  jsonify({
             "time": a,   
             "report": b,
-            "results": movie_data[:limit]
+            "results": movie_data[:limit],
+            'num':len(movie_data)
         })
 
 if __name__ == '__main__':
