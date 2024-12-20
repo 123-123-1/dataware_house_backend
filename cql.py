@@ -522,7 +522,7 @@ def fullsearch():
     where $director is null or COALESCE(l.director_name,null)=$director
     optional match (m)-[:MOVIE_VERSION]-(o:Movie_version)
     where $version is null or COALESCE(o.version,null)=$version
-    return distinct m.movie_id as movie_id,m.movie_name as movie_name,m.movie_release_time as time;
+    return distinct m.score as movie_score,m.movie_name as movie_name,m.movie_release_time as time;
     """
     with driver.session() as session:
         result = session.run(query,
@@ -540,11 +540,11 @@ def fullsearch():
         for record in result:
             # 获取每个字段的值
             
-            movie_id = record["movie_id"]
+            movie_score = record["movie_score"]
             movie_name = record["movie_name"]
             release_time = record["time"].strftime('%Y-%m-%d') if record["time"] else None
             movie_data.append({
-                "movie_id": movie_id,
+                "movie_score": movie_score,
                 "movie_name": movie_name,
                 "movie_release_time": release_time
             })
